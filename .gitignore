@@ -1,0 +1,47 @@
+# .gitignore
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Model files
+*.joblib
+*.pkl
+models/*.joblib
+!models/vegetation_classifier_latest.joblib
+
+# Docker
+*.pid
+docker-compose.override.yml
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db

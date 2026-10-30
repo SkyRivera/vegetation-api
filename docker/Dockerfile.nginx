@@ -1,0 +1,11 @@
+# docker/Dockerfile.nginx
+FROM nginx:alpine
+
+# Eliminar configuración por defecto
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copiar configuración personalizada
+COPY nginx/nginx.conf /etc/nginx/conf.d/
+
+# Exponer puertos
+EXPOSE 80
