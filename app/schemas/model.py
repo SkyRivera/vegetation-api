@@ -1,6 +1,6 @@
 # app/schemas/model.py
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel,ConfigDict
+from typing import List 
 
 
 class ModelInfoResponse(BaseModel):
@@ -14,7 +14,7 @@ class ModelInfoResponse(BaseModel):
     features: List[str]
     classes: List[str]
 
-    class Config:
+    model_config = ConfigDict(
         json_schema_extra = {
             "example": {
                 "name": "vegetation_classifier",
@@ -34,3 +34,4 @@ class ModelInfoResponse(BaseModel):
                 "classes": ["semi_humeda", "seca", "muy_seca", "muy_seca_extrema"]
             }
         }
+    )
