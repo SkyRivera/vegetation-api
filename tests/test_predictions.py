@@ -1,8 +1,6 @@
-import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from app.main import app
-from app.schemas.prediction import PredictionResponse, PredictionDetail
 
 client = TestClient(app)
 
@@ -29,6 +27,8 @@ def test_predict_invalid_file(mock_is_loaded):
 def test_model_info(mock_get_scaler, mock_get_model, mock_is_loaded):
     """Test información del modelo"""
     mock_is_loaded.return_value = True
-    # Aquí podrías simular el retorno de un modelo falso si lo necesitas
     response = client.get("/api/v1/model")
     assert response.status_code == 200
+    data = response.json()
+    assert "name" in data
+    assert "classes" in data

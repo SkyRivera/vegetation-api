@@ -45,3 +45,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Datos de entrenamiento
+data/0/*
+data/1/*
+data/2/*
+data/3/*

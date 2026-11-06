@@ -26,21 +26,29 @@ class PredictionRepository:
                 muy_seca_extrema_percentage=prediction_data.muy_seca_extrema_percentage,
                 image_filename=prediction_data.image_filename,
                 processing_time_ms=prediction_data.processing_time_ms,
-                # 7 base
-                green_pixel_ratio=prediction_data.green_pixel_ratio,
-                brown_pixel_ratio=prediction_data.brown_pixel_ratio,
-                ndvi_sim=prediction_data.ndvi_sim,
-                gci=prediction_data.gci,
-                hsv_mean_h=prediction_data.hsv_mean_h,
-                hsv_mean_s=prediction_data.hsv_mean_s,
-                hsv_mean_v=prediction_data.hsv_mean_v,
-                # 4 derivadas
-                green_brown_ratio=prediction_data.green_brown_ratio,
-                green_minus_brown=prediction_data.green_minus_brown,
-                ndvi_gci_interaction=prediction_data.ndvi_gci_interaction,
-                hue_distance_to_green=prediction_data.hue_distance_to_green
+                # 11 Cromáticas
+                pct_verde=prediction_data.pct_verde,
+                pct_cafe=prediction_data.pct_cafe,
+                pct_amarillo=prediction_data.pct_amarillo,
+                pct_verde_n=prediction_data.pct_verde_n,
+                pct_cafe_n=prediction_data.pct_cafe_n,
+                pct_amarillo_n=prediction_data.pct_amarillo_n,
+                sat_verde=prediction_data.sat_verde,
+                sat_cafe=prediction_data.sat_cafe,
+                sat_amarillo=prediction_data.sat_amarillo,
+                mean_h_veg=prediction_data.mean_h_veg,
+                std_h_veg=prediction_data.std_h_veg,
+                # 9 Textura
+                lap_var=prediction_data.lap_var,
+                lap_var_veg=prediction_data.lap_var_veg,
+                lap_abs_mean_veg=prediction_data.lap_abs_mean_veg,
+                grad_mean=prediction_data.grad_mean,
+                grad_std=prediction_data.grad_std,
+                local_var_mean=prediction_data.local_var_mean,
+                lbp_entropy=prediction_data.lbp_entropy,
+                lbp_std=prediction_data.lbp_std,
+                densidad_verde=prediction_data.densidad_verde
             )
-
             session.add(prediction)
             await session.commit()
             await session.refresh(prediction)

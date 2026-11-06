@@ -37,10 +37,10 @@ class ModelLoader:
 
             # Validación: el scaler debe esperar el mismo nº de features
             n_scaler = getattr(cls._scaler, 'n_features_in_', None)
-            if n_scaler is not None and n_scaler != len(cls._feature_names):
+            if n_scaler is not None and n_scaler != 20:
                 raise ValueError(
                     f"Desajuste: scaler espera {n_scaler} features, "
-                    f"pero se declararon {len(cls._feature_names)}"
+                    f"pero se esperaban 20. Revisa el archivo .joblib."
                 )
 
         except Exception as e:

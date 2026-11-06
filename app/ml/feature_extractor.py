@@ -3,130 +3,155 @@ import cv2
 import numpy as np
 from typing import Dict, List
 import logging
+from skimage.feature import local_binary_pattern
 
 logger = logging.getLogger(__name__)
 
-
 class FeatureExtractor:
     """
-    Extrae las 11 características usadas por el modelo entrenado.
-
-    Features base (7):
-        - green_pixel_ratio
-        - brown_pixel_ratio
-        - ndvi_simulated
-        - gci
-        - hsv_mean_h
-        - hsv_mean_s
-        - hsv_mean_v
-
-    Features derivadas (4):
-        - green_brown_ratio
-        - green_minus_brown
-        - ndvi_gci_interaction
-        - hue_distance_to_green
+    Extrae las 20 características (11 cromáticas + 9 de textura)
+    usando máscara de vegetación para ignorar suelo desnudo.
     """
-
-    # Orden EXACTO de features (debe coincidir con training/train.py)
+    
     FEATURE_NAMES = [
-        'green_pixel_ratio',
-        'brown_pixel_ratio',
-        'ndvi_simulated',
-        'gci',
-        'hsv_mean_h',
-        'hsv_mean_s',
-        'hsv_mean_v',
-        'green_brown_ratio',
-        'green_minus_brown',
-        'ndvi_gci_interaction',
-        'hue_distance_to_green'
+        'pct_verde', 'pct_cafe', 'pct_amarillo',
+        'pct_verde_n', 'pct_cafe_n', 'pct_amarillo_n',
+        'sat_verde', 'sat_cafe', 'sat_amarillo',
+        'mean_h_veg', 'std_h_veg',
+        'lap_var', 'lap_var_veg', 'lap_abs_mean_veg',
+        'grad_mean', 'grad_std',
+        'local_var_mean', 'lbp_entropy', 'lbp_std',
+        'densidad_verde'
     ]
-
-    def __init__(self, target_size=(400, 400)):
+    
+    def __init__(self, target_size=(512, 512)):
         self.target_size = target_size
-
-        # Umbrales HSV alineados con las imágenes reales de referencia
-        self.color_thresholds = {
-            'semi_humeda':      {'hsv_lower': np.array([35, 40, 40]),  'hsv_upper': np.array([85, 255, 255])},
-            'seca':             {'hsv_lower': np.array([20, 40, 50]),  'hsv_upper': np.array([34, 255, 230])},
-            'muy_seca':         {'hsv_lower': np.array([12, 50, 60]),  'hsv_upper': np.array([19, 255, 220])},
-            'muy_seca_extrema': {'hsv_lower': np.array([0,  40, 50]),  'hsv_upper': np.array([11, 255, 200])}
-        }
-
+    
     def preprocess_image(self, image_bytes: bytes) -> np.ndarray:
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
+        
         if img is None:
             raise ValueError("No se pudo decodificar la imagen")
-
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, self.target_size)
+        
+        # El nuevo modelo espera BGR directo y 512x512 (ver código de entrenamiento)
+        img_resized = cv2.resize(img, self.target_size, interpolation=cv2.INTER_AREA)
         return img_resized
 
-    def extract_features(self, image: np.ndarray) -> Dict[str, float]:
-        """Extrae las 11 características en el orden esperado por el modelo."""
-        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-
-        # --- Features base ---
-        green_pixel_ratio = self._green_pixel_ratio(hsv)
-        brown_pixel_ratio = self._brown_pixel_ratio(hsv)
-        ndvi_sim = self._calculate_simulated_ndvi(image)
-        gci = self._calculate_gci(image)
-
-        hsv_mean = np.mean(hsv, axis=(0, 1))
-        hsv_mean_h = float(hsv_mean[0])
-        hsv_mean_s = float(hsv_mean[1])
-        hsv_mean_v = float(hsv_mean[2])
-
-        # --- Features derivadas (deben coincidir con train.py) ---
-        green_brown_ratio = green_pixel_ratio / (brown_pixel_ratio + 1e-6)
-        green_minus_brown = green_pixel_ratio - brown_pixel_ratio
-        ndvi_gci_inter = ndvi_sim * gci
-        hue_dist_green = abs(hsv_mean_h - 60) / 60.0
-
-        return {
-            'green_pixel_ratio':    green_pixel_ratio,
-            'brown_pixel_ratio':    brown_pixel_ratio,
-            'ndvi_simulated':       ndvi_sim,
-            'gci':                  gci,
-            'hsv_mean_h':           hsv_mean_h,
-            'hsv_mean_s':           hsv_mean_s,
-            'hsv_mean_v':           hsv_mean_v,
-            'green_brown_ratio':    green_brown_ratio,
-            'green_minus_brown':    green_minus_brown,
-            'ndvi_gci_interaction': ndvi_gci_inter,
-            'hue_distance_to_green': hue_dist_green
-        }
-
+    def extract_features(self, image_bgr: np.ndarray) -> Dict[str, float]:
+        """Extrae las 20 características"""
+        hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+        gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+        
+        veg_mask = self._build_vegetation_mask(hsv)
+        
+        crom_feats = self._chromatic_signatures(hsv, veg_mask)
+        text_feats = self._texture_features(gray, veg_mask)
+        
+        all_feats = crom_feats + text_feats
+        
+        return {name: float(val) for name, val in zip(self.FEATURE_NAMES, all_feats)}
+    
     def features_to_vector(self, features: Dict[str, float]) -> List[float]:
-        """Devuelve el vector en el ORDEN exacto del entrenamiento."""
-        return [float(features[name]) for name in self.FEATURE_NAMES]
+        return [features[name] for name in self.FEATURE_NAMES]
 
-    # ---------- Cálculos internos ----------
+    # --- Métodos internos copiados exactamente del nuevo script ---
+    
+    def _build_vegetation_mask(self, hsv: np.ndarray) -> np.ndarray:
+        h, s, v = cv2.split(hsv)
+        mask_hue = cv2.inRange(h, 10, 95)
+        mask_sat = cv2.inRange(s, 45, 255)
+        mask_val = cv2.inRange(v, 30, 255)
+        mask = cv2.bitwise_and(mask_hue, mask_sat)
+        mask = cv2.bitwise_and(mask, mask_val)
+        kernel = np.ones((3, 3), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        return mask
 
-    def _green_pixel_ratio(self, hsv_image: np.ndarray) -> float:
-        lower = self.color_thresholds['semi_humeda']['hsv_lower']
-        upper = self.color_thresholds['semi_humeda']['hsv_upper']
-        mask = cv2.inRange(hsv_image, lower, upper)
-        return float(np.sum(mask > 0) / mask.size)
+    def _chromatic_signatures(self, hsv: np.ndarray, veg_mask: np.ndarray) -> list:
+        h, s, v = cv2.split(hsv)
+        verde = cv2.inRange(hsv, (30, 60, 40), (90, 255, 255))
+        cafe1 = cv2.inRange(hsv, (5, 70, 30), (20, 255, 190))
+        cafe2 = cv2.inRange(hsv, (0, 60, 30), (5, 255, 170))
+        cafe  = cv2.bitwise_or(cafe1, cafe2)
+        amarillo = cv2.inRange(hsv, (20, 50, 100), (32, 255, 255))
 
-    def _brown_pixel_ratio(self, hsv_image: np.ndarray) -> float:
-        # Cubre seca + muy_seca + muy_seca_extrema
-        lower = np.array([0, 40, 50])
-        upper = np.array([34, 255, 230])
-        mask = cv2.inRange(hsv_image, lower, upper)
-        return float(np.sum(mask > 0) / mask.size)
+        verde    = cv2.bitwise_and(verde,    veg_mask)
+        cafe     = cv2.bitwise_and(cafe,     veg_mask)
+        amarillo = cv2.bitwise_and(amarillo, veg_mask)
 
-    def _calculate_simulated_ndvi(self, image: np.ndarray) -> float:
-        nir_sim = image[:, :, 1].astype(np.float32)
-        red = image[:, :, 0].astype(np.float32)
-        ndvi = (nir_sim - red) / (nir_sim + red + 1e-6)
-        return float(np.mean(ndvi))
+        total_veg = int(np.count_nonzero(veg_mask)) + 1e-6
 
-    def _calculate_gci(self, image: np.ndarray) -> float:
-        green = image[:, :, 1].astype(np.float32)
-        red = image[:, :, 0].astype(np.float32)
-        blue = image[:, :, 2].astype(np.float32)
-        gci = (2 * green - red - blue) / (2 * green + red + blue + 1e-6)
-        return float(np.mean(gci))
+        pct_verde    = np.count_nonzero(verde)    / total_veg
+        pct_cafe     = np.count_nonzero(cafe)     / total_veg
+        pct_amarillo = np.count_nonzero(amarillo) / total_veg
+
+        suma = pct_verde + pct_cafe + pct_amarillo + 1e-6
+        pct_verde_n    = pct_verde    / suma
+        pct_cafe_n     = pct_cafe     / suma
+        pct_amarillo_n = pct_amarillo / suma
+
+        def mean_sat(mask):
+            if np.count_nonzero(mask) == 0: return 0.0
+            return float(s[mask > 0].mean()) / 255.0
+
+        sat_verde    = mean_sat(verde)
+        sat_cafe     = mean_sat(cafe)
+        sat_amarillo = mean_sat(amarillo)
+
+        h_veg_vals = h[veg_mask > 0]
+        if h_veg_vals.size == 0:
+            mean_h, std_h = 0.0, 0.0
+        else:
+            mean_h = float(h_veg_vals.mean()) / 180.0
+            std_h  = float(h_veg_vals.std())  / 180.0
+
+        return [
+            pct_verde, pct_cafe, pct_amarillo,
+            pct_verde_n, pct_cafe_n, pct_amarillo_n,
+            sat_verde, sat_cafe, sat_amarillo,
+            mean_h, std_h,
+        ]
+
+    def _texture_features(self, gray: np.ndarray, veg_mask: np.ndarray) -> list:
+        lap = cv2.Laplacian(gray, cv2.CV_64F)
+        lap_var = float(lap.var())
+
+        lap_veg = lap[veg_mask > 0]
+        lap_var_veg = float(lap_veg.var()) if lap_veg.size > 10 else 0.0
+        lap_abs_mean_veg = float(np.abs(lap_veg).mean()) if lap_veg.size > 10 else 0.0
+
+        gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        mag = np.sqrt(gx**2 + gy**2)
+        mag_veg = mag[veg_mask > 0]
+        grad_mean = float(mag_veg.mean()) if mag_veg.size > 10 else 0.0
+        grad_std  = float(mag_veg.std())  if mag_veg.size > 10 else 0.0
+
+        kernel = np.ones((9, 9), np.float32) / 81.0
+        mean_local = cv2.filter2D(gray.astype(np.float32), -1, kernel)
+        sq = cv2.filter2D((gray.astype(np.float32))**2, -1, kernel)
+        local_var = np.clip(sq - mean_local**2, 0, None)
+        lv_veg = local_var[veg_mask > 0]
+        local_var_mean = float(lv_veg.mean()) if lv_veg.size > 10 else 0.0
+
+        lbp = local_binary_pattern(gray, P=8, R=1, method="uniform")
+        lbp_veg = lbp[veg_mask > 0]
+        if lbp_veg.size > 0:
+            hist, _ = np.histogram(lbp_veg, bins=10, range=(0, 10), density=True)
+            lbp_entropy = float(-np.sum(hist * np.log2(hist + 1e-9)))
+            lbp_std     = float(lbp_veg.std())
+        else:
+            lbp_entropy, lbp_std = 0.0, 0.0
+
+        hsv = cv2.cvtColor(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2HSV)
+        verde = cv2.inRange(hsv, (30, 60, 40), (90, 255, 255))
+        verde = cv2.bitwise_and(verde, veg_mask)
+        densidad_verde = np.count_nonzero(verde) / (np.count_nonzero(veg_mask) + 1e-6)
+
+        return [
+            lap_var, lap_var_veg, lap_abs_mean_veg,
+            grad_mean, grad_std, local_var_mean,
+            lbp_entropy, lbp_std, densidad_verde,
+        ]

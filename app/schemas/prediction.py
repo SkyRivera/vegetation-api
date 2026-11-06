@@ -1,7 +1,7 @@
 # app/schemas/prediction.py
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Literal, List
+from typing import Literal
 
 
 # ---------- Submodelos tipados ----------
@@ -35,27 +35,36 @@ class DistributionDetail(BaseModel):
 
 
 class FeaturesDetail(BaseModel):
-    """
-    Características extraídas de la imagen.
-    El orden coincide con el vector usado por el modelo (11 features).
-    """
-    green_pixel_ratio:      float
-    brown_pixel_ratio:      float
-    ndvi_simulated:         float
-    gci:                    float
-    hsv_mean_h:             float
-    hsv_mean_s:             float
-    hsv_mean_v:             float
-    green_brown_ratio:      float
-    green_minus_brown:      float
-    ndvi_gci_interaction:   float
-    hue_distance_to_green:  float
+    """Las 20 características extraídas de la imagen (11 cromáticas + 9 textura)"""
+    # 11 Cromáticas
+    pct_verde: float
+    pct_cafe: float
+    pct_amarillo: float
+    pct_verde_n: float
+    pct_cafe_n: float
+    pct_amarillo_n: float
+    sat_verde: float
+    sat_cafe: float
+    sat_amarillo: float
+    mean_h_veg: float
+    std_h_veg: float
+    
+    # 9 de Textura
+    lap_var: float
+    lap_var_veg: float
+    lap_abs_mean_veg: float
+    grad_mean: float
+    grad_std: float
+    local_var_mean: float
+    lbp_entropy: float
+    lbp_std: float
+    densidad_verde: float
 
 
 # ---------- Modelos de request/response ----------
 
 class PredictionCreate(BaseModel):
-    """Modelo interno para persistir una predicción en DB (no expuesto al cliente)."""
+    """Modelo interno para persistir en DB"""
     prediction_id: str
     created_at: datetime
     model_version: str
@@ -67,18 +76,30 @@ class PredictionCreate(BaseModel):
     muy_seca_extrema_percentage: float
     image_filename: str
     processing_time_ms: int
-    # 11 features
-    green_pixel_ratio: float
-    brown_pixel_ratio: float
-    ndvi_sim: float
-    gci: float
-    hsv_mean_h: float
-    hsv_mean_s: float
-    hsv_mean_v: float
-    green_brown_ratio: float
-    green_minus_brown: float
-    ndvi_gci_interaction: float
-    hue_distance_to_green: float
+    
+    # 11 Cromáticas
+    pct_verde: float
+    pct_cafe: float
+    pct_amarillo: float
+    pct_verde_n: float
+    pct_cafe_n: float
+    pct_amarillo_n: float
+    sat_verde: float
+    sat_cafe: float
+    sat_amarillo: float
+    mean_h_veg: float
+    std_h_veg: float
+    
+    # 9 Textura
+    lap_var: float
+    lap_var_veg: float
+    lap_abs_mean_veg: float
+    grad_mean: float
+    grad_std: float
+    local_var_mean: float
+    lbp_entropy: float
+    lbp_std: float
+    densidad_verde: float
 
 
 class PredictionResponse(BaseModel):
